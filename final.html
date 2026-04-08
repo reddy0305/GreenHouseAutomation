@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GreenCore — Greenhouse Automation</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0f0a;--surface:#111a11;--surface2:#162016;--border:#1e2e1e;--green:#4ade80;--green-dim:#22c55e;--green-muted:#166534;--amber:#fbbf24;--red:#f87171;--blue:#60a5fa;--teal:#2dd4bf;--text:#e2f0e2;--text-dim:#7a9a7a;--text-muted:#4a6a4a;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 20% 20%,rgba(74,222,128,0.06) 0%,transparent 60%),radial-gradient(ellipse 40% 60% at 80% 80%,rgba(45,212,191,0.04) 0%,transparent 60%);pointer-events:none;z-index:0;}
+
+/* ── PAGE SYSTEM ── */
+.page{position:fixed;inset:0;overflow-y:auto;transition:transform 0.5s cubic-bezier(0.77,0,0.18,1);z-index:1;}
+#dashPage{transform:translateX(0);}
+#cropPage{transform:translateX(100%);}
+#dashPage.slide-out{transform:translateX(-28%);}
+#cropPage.slide-in{transform:translateX(0);}
+
+/* ── HEADER ── */
+.app-header{position:sticky;top:0;z-index:100;background:rgba(10,15,10,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;}
+.logo{font-family:'Space Mono',monospace;font-size:1rem;color:var(--green);letter-spacing:0.1em;display:flex;align-items:center;gap:10px;}
+.logo-dot{width:9px;height:9px;background:var(--green);border-radius:50%;animation:pulseDot 2s infinite;}
+@keyframes pulseDot{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,0.4);}50%{box-shadow:0 0 0 6px rgba(74,222,128,0);}}
+.live-badge{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--green);border:1px solid var(--green-muted);padding:3px 10px;border-radius:2px;background:rgba(74,222,128,0.05);letter-spacing:0.12em;}
+.clock{font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--text-dim);}
+.back-btn{display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--text-dim);border:1px solid var(--border);background:var(--surface2);padding:6px 14px;border-radius:4px;cursor:pointer;transition:all 0.2s;}
+.back-btn:hover{border-color:var(--green);color:var(--green);}
+
+/* ── DASHBOARD ── */
+.dash-body{max-width:1400px;margin:0 auto;padding:2rem;display:grid;grid-template-columns:280px 1fr;gap:1.5rem;position:relative;z-index:1;}
+.sidebar{display:flex;flex-direction:column;gap:1rem;}
+.main-col{display:flex;flex-direction:column;gap:1.5rem;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1.25rem;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(74,222,128,0.3),transparent);}
+.card-title{font-size:0.6rem;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:0.2em;color:var(--text-muted);margin-bottom:1rem;}
+
+/* env metrics */
+.met-item{margin-bottom:0.7rem;}
+.met-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.met-label{font-size:0.68rem;color:var(--text-dim);font-family:'Space Mono',monospace;}
+.met-val{font-size:0.9rem;font-weight:700;font-family:'Space Mono',monospace;}
+.met-val.ok{color:var(--green)}.met-val.warn{color:var(--amber)}.met-val.alert{color:var(--red);animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.pbar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.pbar-fill{height:100%;border-radius:2px;transition:width 0.8s;}
+
+/* ctrl buttons */
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;}
+.ctrl-btn{padding:0.55rem 0.4rem;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--text-dim);font-family:'Space Mono',monospace;font-size:0.62rem;cursor:pointer;transition:all 0.2s;text-transform:uppercase;}
+.ctrl-btn:hover{border-color:var(--green-dim);color:var(--green);}
+.ctrl-btn.active{background:rgba(74,222,128,0.1);border-color:var(--green);color:var(--green);}
+
+/* add crop */
+.add-btn{width:100%;padding:0.75rem;background:rgba(74,222,128,0.07);border:1px dashed var(--green-muted);border-radius:6px;color:var(--green);font-family:'Space Mono',monospace;font-size:0.72rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase;}
+.add-btn:hover{background:rgba(74,222,128,0.14);border-color:var(--green);transform:translateY(-1px);}
+
+/* stats */
+.stat-row{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:0.68rem;padding:0.3rem 0;}
+.stat-row span:first-child{color:var(--text-muted);}
+
+/* chart */
+.chart-section{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1.5rem;}
+.chart-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}
+.chart-title{font-size:0.85rem;font-weight:700;}
+.chart-legend{display:flex;gap:1rem;font-family:'Space Mono',monospace;font-size:0.58rem;}
+.leg-item{display:flex;align-items:center;gap:5px;color:var(--text-dim);}
+.ldot{width:7px;height:7px;border-radius:50%;}
+canvas#envChart{width:100%!important;height:160px!important;}
+
+/* section row */
+.sec-row{display:flex;justify-content:space-between;align-items:center;}
+.sec-lbl{font-size:0.6rem;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:0.18em;color:var(--text-muted);}
+
+/* alert bar */
+.alert-bar{padding:0.65rem 1rem;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);border-radius:4px;font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--amber);display:none;align-items:center;gap:0.75rem;}
+.alert-bar.show{display:flex;}
+
+/* ── CROP CARDS (dashboard) ── */
+.crop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:1rem;}
+.crop-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform 0.25s,border-color 0.25s,box-shadow 0.25s;animation:cardIn 0.4s ease;position:relative;}
+.crop-card:hover{transform:translateY(-5px);border-color:var(--green-muted);box-shadow:0 14px 36px rgba(0,0,0,0.45);}
+@keyframes cardIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+.cc-accent{height:3px;}
+.cc-body{padding:1.1rem;}
+.cc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;}
+.cc-name{font-size:1rem;font-weight:800;}
+.cc-meta{font-family:'Space Mono',monospace;font-size:0.57rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-top:3px;}
+.status-pill{font-family:'Space Mono',monospace;font-size:0.57rem;padding:3px 8px;border-radius:2px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;}
+.s-ok{background:rgba(74,222,128,0.12);color:var(--green);border:1px solid rgba(74,222,128,0.3);}
+.s-warn{background:rgba(251,191,36,0.1);color:var(--amber);border:1px solid rgba(251,191,36,0.3);}
+.s-crit{background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.3);}
+.mini-mets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:0.7rem;}
+.mm{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:0.45rem;text-align:center;}
+.mm-lbl{font-family:'Space Mono',monospace;font-size:0.5rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;}
+.mm-val{font-family:'Space Mono',monospace;font-size:0.8rem;font-weight:700;}
+.bar-row{margin-bottom:0.45rem;}
+.bar-lbl{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:0.57rem;color:var(--text-muted);margin-bottom:3px;}
+.mini-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.mini-bar-fill{height:100%;border-radius:3px;transition:width 0.8s;}
+.cc-footer{font-family:'Space Mono',monospace;font-size:0.57rem;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between;margin-top:0.65rem;padding-top:0.6rem;border-top:1px solid var(--border);}
+.cc-footer .hint{color:var(--green);}
+
+.empty-state{grid-column:1/-1;text-align:center;padding:4rem 2rem;color:var(--text-muted);font-family:'Space Mono',monospace;}
+.empty-icon{font-size:3rem;margin-bottom:1rem;opacity:0.3;}
+.empty-text{font-size:0.75rem;line-height:1.8;}
+
+/* ── ADD CROP MODAL ── */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(8px);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.modal-ov.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:2rem;width:460px;max-width:95vw;transform:translateY(20px);transition:transform 0.3s;position:relative;}
+.modal-ov.open .modal{transform:translateY(0);}
+.modal-title{font-family:'Space Mono',monospace;font-size:1rem;color:var(--green);font-weight:700;margin-bottom:0.2rem;}
+.modal-sub{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1.5rem;}
+.modal-x{position:absolute;top:1rem;right:1rem;width:28px;height:28px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--text-dim);cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.modal-x:hover{color:var(--red);border-color:var(--red);}
+.form-g{margin-bottom:0.9rem;}
+.form-lbl{display:block;font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;}
+.form-inp,.form-sel{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:0.6rem 0.8rem;color:var(--text);font-family:'Space Mono',monospace;font-size:0.75rem;outline:none;transition:border-color 0.2s;}
+.form-inp:focus,.form-sel:focus{border-color:var(--green-dim);}
+.form-sel option{background:var(--bg);}
+.form-grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;}
+.modal-acts{display:flex;gap:0.75rem;margin-top:1.25rem;}
+.btn-p{flex:1;padding:0.7rem;background:var(--green);border:none;border-radius:4px;color:#0a0f0a;font-family:'Space Mono',monospace;font-size:0.72rem;font-weight:700;text-transform:uppercase;cursor:pointer;transition:all 0.2s;}
+.btn-p:hover{background:var(--green-dim);transform:translateY(-1px);box-shadow:0 4px 16px rgba(74,222,128,0.3);}
+.btn-s{flex:1;padding:0.7rem;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-family:'Space Mono',monospace;font-size:0.72rem;text-transform:uppercase;cursor:pointer;transition:all 0.2s;}
+.btn-s:hover{border-color:var(--text-dim);color:var(--text);}
+.color-row{display:flex;gap:8px;flex-wrap:wrap;}
+.col-opt{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform 0.2s,border-color 0.2s;}
+.col-opt:hover{transform:scale(1.2);}
+.col-opt.sel{border-color:white;transform:scale(1.1);}
+
+/* ══════════════════════════════
+   CROP DETAIL PAGE
+══════════════════════════════ */
+#cropPage{background:var(--bg);}
+.cp-body{max-width:1100px;margin:0 auto;padding:2rem;display:flex;flex-direction:column;gap:1.5rem;position:relative;z-index:1;}
+
+/* Section title */
+.cp-sec{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.18em;display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;}
+.cp-sec::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Hero */
+.cp-hero{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem;position:relative;overflow:hidden;}
+.cp-hero-glow{position:absolute;top:-60px;right:-60px;width:240px;height:240px;border-radius:50%;opacity:0.1;filter:blur(70px);pointer-events:none;}
+.cp-hero-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;}
+.cp-hero-left{display:flex;align-items:center;gap:1.5rem;}
+.cp-emoji{font-size:3.5rem;line-height:1;flex-shrink:0;}
+.cp-name{font-size:2rem;font-weight:800;line-height:1.1;}
+.cp-meta-txt{font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.12em;margin-top:6px;}
+.cp-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.cp-badge{font-family:'Space Mono',monospace;font-size:0.6rem;padding:4px 10px;border-radius:3px;text-transform:uppercase;font-weight:700;letter-spacing:0.06em;}
+.bd-type{background:rgba(45,212,191,0.1);color:#2dd4bf;border:1px solid rgba(45,212,191,0.25);}
+.bd-zone{background:rgba(96,165,250,0.1);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);}
+.bd-stage{background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25);}
+
+/* Sensor cards */
+.sensor-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+@media(max-width:680px){.sensor-grid{grid-template-columns:1fr;}}
+.sensor-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.4rem;position:relative;overflow:hidden;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;}
+.sensor-card:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,0.4);}
+.sc-stripe{position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
+.sc-icon{font-size:1.5rem;margin-bottom:0.5rem;}
+.sc-label{font-family:'Space Mono',monospace;font-size:0.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px;}
+.sc-value{font-family:'Space Mono',monospace;font-size:2.2rem;font-weight:700;line-height:1;margin-bottom:4px;}
+.sc-tgt{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--text-dim);}
+.sc-diff{display:inline-block;padding:2px 7px;border-radius:3px;font-size:0.58rem;font-weight:700;margin-left:4px;}
+.sc-spark{margin-top:0.85rem;height:46px;}
+canvas.spark{width:100%!important;height:46px!important;display:block;}
+
+/* Status bars */
+.sb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+@media(max-width:580px){.sb-grid{grid-template-columns:1fr;}}
+.sb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
+.sb-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.65rem;}
+.sb-lbl{font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;}
+.sb-val{font-family:'Space Mono',monospace;font-size:1.2rem;font-weight:700;}
+.sb-bar{height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin-bottom:0.5rem;}
+.sb-fill{height:100%;border-radius:5px;transition:width 1s ease;position:relative;overflow:hidden;}
+.sb-fill::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:rgba(255,255,255,0.2);transform:skewX(-20deg);animation:shine 2.5s infinite;}
+@keyframes shine{0%{left:-60%}100%{left:120%}}
+.sb-note{font-family:'Space Mono',monospace;font-size:0.58rem;color:var(--text-muted);}
+
+/* Device cards */
+.dev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:0.85rem;}
+.dev-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem;transition:border-color 0.3s,box-shadow 0.3s,background 0.3s;}
+.dev-card.on{border-color:rgba(74,222,128,0.4);background:rgba(74,222,128,0.04);box-shadow:0 0 20px rgba(74,222,128,0.07);}
+.dev-card.on.fan {border-color:rgba(96,165,250,0.4);background:rgba(96,165,250,0.04);box-shadow:0 0 20px rgba(96,165,250,0.07);}
+.dev-card.on.heat{border-color:rgba(248,113,113,0.4);background:rgba(248,113,113,0.04);box-shadow:0 0 20px rgba(248,113,113,0.07);}
+.dev-card.on.hum {border-color:rgba(45,212,191,0.4);background:rgba(45,212,191,0.04);box-shadow:0 0 20px rgba(45,212,191,0.07);}
+.dev-card.on.co2 {border-color:rgba(74,222,128,0.4);background:rgba(74,222,128,0.04);}
+.dev-card.on.pump{border-color:rgba(251,191,36,0.4);background:rgba(251,191,36,0.04);box-shadow:0 0 20px rgba(251,191,36,0.07);}
+.dc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;}
+.dc-icon{font-size:1.5rem;}
+/* Toggle switch */
+.tgl{position:relative;width:46px;height:25px;cursor:pointer;flex-shrink:0;}
+.tgl input{opacity:0;width:0;height:0;position:absolute;}
+.tgl-track{position:absolute;inset:0;background:var(--border);border-radius:13px;transition:background 0.3s;}
+.tgl input:checked~.tgl-track{background:var(--green-muted);}
+.fan  .tgl input:checked~.tgl-track{background:#1e3a5f;}
+.heat .tgl input:checked~.tgl-track{background:#5c1a1a;}
+.hum  .tgl input:checked~.tgl-track{background:#0d3d3a;}
+.pump .tgl input:checked~.tgl-track{background:#4a3500;}
+.tgl-thumb{position:absolute;top:3px;left:3px;width:19px;height:19px;background:var(--text-muted);border-radius:50%;transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1),background 0.3s;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.tgl input:checked~.tgl-thumb{transform:translateX(21px);}
+.fan  .tgl input:checked~.tgl-thumb{background:#60a5fa;}
+.heat .tgl input:checked~.tgl-thumb{background:#f87171;}
+.hum  .tgl input:checked~.tgl-thumb{background:#2dd4bf;}
+.co2  .tgl input:checked~.tgl-thumb{background:#4ade80;}
+.pump .tgl input:checked~.tgl-thumb{background:#fbbf24;}
+.dc-name{font-size:0.85rem;font-weight:700;margin-bottom:3px;}
+.dc-desc{font-family:'Space Mono',monospace;font-size:0.57rem;color:var(--text-muted);line-height:1.5;margin-bottom:0.65rem;}
+.dc-status{font-family:'Space Mono',monospace;font-size:0.58rem;display:flex;align-items:center;gap:6px;border-top:1px solid var(--border);padding-top:0.5rem;}
+.dc-dot{width:6px;height:6px;border-radius:50%;background:var(--text-muted);transition:background 0.3s;flex-shrink:0;}
+.dev-card.on.fan  .dc-dot{background:#60a5fa;animation:pulseDot 1.5s infinite;}
+.dev-card.on.heat .dc-dot{background:#f87171;animation:pulseDot 1.5s infinite;}
+.dev-card.on.hum  .dc-dot{background:#2dd4bf;animation:pulseDot 1.5s infinite;}
+.dev-card.on.co2  .dc-dot{background:#4ade80;animation:pulseDot 1.5s infinite;}
+.dev-card.on.pump .dc-dot{background:#fbbf24;animation:pulseDot 1.5s infinite;}
+.dc-stat-txt{color:var(--text-dim);}
+
+/* Quick actions */
+.qa-row{display:flex;gap:1rem;flex-wrap:wrap;}
+.qa-btn{flex:1;min-width:130px;padding:0.85rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-family:'Space Mono',monospace;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.qa-btn.water:hover{border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,0.06);}
+.qa-btn.fert:hover{border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,0.06);}
+.qa-btn.del:hover{border-color:#f87171;color:#f87171;background:rgba(248,113,113,0.06);}
+
+/* Activity log */
+.act-log{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
+.act-log-title{font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:0.85rem;}
+.act-list{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:0.45rem;}
+.act-item{display:flex;gap:10px;align-items:flex-start;font-family:'Space Mono',monospace;font-size:0.62rem;}
+.act-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.act-time{color:var(--text-muted);flex-shrink:0;}
+.act-text{color:var(--text-dim);}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PAGE 1: DASHBOARD ══════════════ -->
+<div class="page" id="dashPage">
+  <div class="app-header">
+    <div class="logo"><div class="logo-dot"></div>GREENCORE</div>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <div class="live-badge">● Live</div>
+      <div class="clock" id="clockEl">--:--:--</div>
+    </div>
+  </div>
+
+  <div class="dash-body">
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-title">Environment</div>
+        <div class="met-item">
+          <div class="met-header"><span class="met-label">🌡 Temperature</span><span class="met-val ok" id="sTemp">--</span></div>
+          <div class="pbar"><div class="pbar-fill" id="sTempB" style="background:var(--green)"></div></div>
+        </div>
+        <div class="met-item">
+          <div class="met-header"><span class="met-label">💧 Humidity</span><span class="met-val ok" id="sHum">--</span></div>
+          <div class="pbar"><div class="pbar-fill" id="sHumB" style="background:var(--blue)"></div></div>
+        </div>
+        <div class="met-item">
+          <div class="met-header"><span class="met-label">🌿 CO₂</span><span class="met-val ok" id="sCO2">--</span></div>
+          <div class="pbar"><div class="pbar-fill" id="sCO2B" style="background:var(--teal)"></div></div>
+        </div>
+        <div class="met-item">
+          <div class="met-header"><span class="met-label">☀ Light µmol</span><span class="met-val ok" id="sLight">--</span></div>
+          <div class="pbar"><div class="pbar-fill" id="sLightB" style="background:var(--amber)"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Automation</div>
+        <div class="ctrl-grid">
+          <button class="ctrl-btn active" onclick="dashToggle(this,'hvac')">⚡ HVAC</button>
+          <button class="ctrl-btn active" onclick="dashToggle(this,'irr')">💦 Irrigation</button>
+          <button class="ctrl-btn" onclick="dashToggle(this,'light')">💡 Lighting</button>
+          <button class="ctrl-btn active" onclick="dashToggle(this,'co2')">🌿 CO₂</button>
+        </div>
+      </div>
+
+      <button class="add-btn" onclick="openModal()">＋ Add Crop</button>
+
+      <div class="card">
+        <div class="card-title">System Stats</div>
+        <div class="stat-row"><span>Active Crops</span><span style="color:var(--green)" id="statCrops">0</span></div>
+        <div class="stat-row"><span>Avg Health</span><span style="color:var(--green)" id="statHealth">—</span></div>
+        <div class="stat-row"><span>Alerts</span><span style="color:var(--amber)" id="statAlerts">0</span></div>
+        <div class="stat-row"><span>Uptime</span><span style="color:var(--text-dim)" id="statUptime">00:00:00</span></div>
+      </div>
+    </div>
+
+    <div class="main-col">
+      <div class="alert-bar" id="alertBar">⚠ <span id="alertTxt"></span></div>
+
+      <div class="chart-section">
+        <div class="chart-hdr">
+          <div class="chart-title">Real-Time Environment</div>
+          <div class="chart-legend">
+            <div class="leg-item"><div class="ldot" style="background:#4ade80"></div>Temp</div>
+            <div class="leg-item"><div class="ldot" style="background:#60a5fa"></div>Humidity</div>
+            <div class="leg-item"><div class="ldot" style="background:#2dd4bf"></div>CO₂×0.1</div>
+          </div>
+        </div>
+        <canvas id="envChart"></canvas>
+      </div>
+
+      <div class="sec-row">
+        <div class="sec-lbl">Crop Monitor — <span id="cropCountEl">0 crops</span></div>
+        <button class="add-btn" style="width:auto;padding:0.45rem 1rem;font-size:0.62rem;" onclick="openModal()">＋ Add Crop</button>
+      </div>
+
+      <div class="crop-grid" id="cropGrid">
+        <div class="empty-state">
+          <div class="empty-icon">🌱</div>
+          <div class="empty-text">No crops yet.<br>Click "+ Add Crop" to begin.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 2: CROP DETAIL ══════════════ -->
+<div class="page" id="cropPage">
+  <div class="app-header">
+    <button class="back-btn" onclick="goBack()">← Dashboard</button>
+    <div class="logo" style="position:absolute;left:50%;transform:translateX(-50%);pointer-events:none;">
+      <div class="logo-dot"></div>
+      <span id="cpHdrName">Crop Detail</span>
+    </div>
+    <div class="live-badge">● Live</div>
+  </div>
+  <div class="cp-body" id="cpBody"></div>
+</div>
+
+<!-- ADD CROP MODAL -->
+<div class="modal-ov" id="addModal">
+  <div class="modal">
+    <button class="modal-x" onclick="closeModal()">✕</button>
+    <div class="modal-title">// ADD_CROP</div>
+    <div class="modal-sub">Configure new crop zone</div>
+    <div class="form-g"><label class="form-lbl">Crop Name</label><input class="form-inp" id="iName" placeholder="e.g. Cherry Tomatoes"/></div>
+    <div class="form-grid2">
+      <div class="form-g"><label class="form-lbl">Type</label>
+        <select class="form-sel" id="iType"><option>Vegetable</option><option>Fruit</option><option>Herb</option><option>Leafy Green</option><option>Flower</option><option>Root Crop</option><option>Grain</option></select>
+      </div>
+      <div class="form-g"><label class="form-lbl">Growth Stage</label>
+        <select class="form-sel" id="iStage"><option>Seedling</option><option>Vegetative</option><option>Flowering</option><option>Fruiting</option><option>Harvest</option></select>
+      </div>
+    </div>
+    <div class="form-grid2">
+      <div class="form-g"><label class="form-lbl">Target Temp °C</label><input class="form-inp" id="iTemp" type="number" value="22" min="10" max="40"/></div>
+      <div class="form-g"><label class="form-lbl">Target Humidity %</label><input class="form-inp" id="iHum" type="number" value="65" min="20" max="95"/></div>
+    </div>
+    <div class="form-grid2">
+      <div class="form-g"><label class="form-lbl">Target CO₂ ppm</label><input class="form-inp" id="iCO2" type="number" value="800" min="400" max="2000"/></div>
+      <div class="form-g"><label class="form-lbl">Zone ID</label><input class="form-inp" id="iZone" placeholder="Zone-A1"/></div>
+    </div>
+    <div class="form-g">
+      <label class="form-lbl">Card Color</label>
+      <div class="color-row" id="colorPicker">
+        <div class="col-opt sel" data-c="#4ade80" style="background:#4ade80" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#60a5fa" style="background:#60a5fa" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#fbbf24" style="background:#fbbf24" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#f87171" style="background:#f87171" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#a78bfa" style="background:#a78bfa" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#2dd4bf" style="background:#2dd4bf" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#fb923c" style="background:#fb923c" onclick="pickColor(this)"></div>
+        <div class="col-opt" data-c="#e879f9" style="background:#e879f9" onclick="pickColor(this)"></div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-s" onclick="closeModal()">Cancel</button>
+      <button class="btn-p" onclick="addCrop()">Deploy Zone</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// STATE
+// ═══════════════════════════════════
+let crops=[], selectedColor='#4ade80', startTime=Date.now(), alertCount=0, activeCropId=null;
+
+// PRE-LOADED CROPS FROM CONFIG TABLE
+const PRESET_CROPS = [
+  {name:'Tomato',    type:'Vegetable', stage:'Flowering',  tTemp:24, tHum:65, tCO2:900,  zone:'Zone-1', color:'#f87171'},
+  {name:'Lettuce',   type:'Vegetable', stage:'Seedling',   tTemp:21, tHum:65, tCO2:800,  zone:'Zone-2', color:'#4ade80'},
+  {name:'Cucumber',  type:'Vegetable', stage:'Vegetative', tTemp:25, tHum:70, tCO2:950,  zone:'Zone-3', color:'#2dd4bf'},
+  {name:'Bell Pepper',type:'Vegetable',stage:'Flowering',  tTemp:23, tHum:60, tCO2:900,  zone:'Zone-4', color:'#fb923c'},
+  {name:'Strawberry',type:'Fruit',     stage:'Fruiting',   tTemp:22, tHum:75, tCO2:850,  zone:'Zone-5', color:'#f472b6'},
+  {name:'Cherry',    type:'Fruit',     stage:'Vegetative', tTemp:20, tHum:60, tCO2:800,  zone:'Zone-6', color:'#a78bfa'},
+  {name:'Watermelon',type:'Fruit',     stage:'Flowering',  tTemp:27, tHum:70, tCO2:1000, zone:'Zone-7', color:'#fbbf24'},
+  {name:'Rose',      type:'Flower',    stage:'Seedling',   tTemp:24, tHum:65, tCO2:900,  zone:'Zone-8', color:'#e879f9'},
+  {name:'Gerbera',   type:'Flower',    stage:'Flowering',  tTemp:22, tHum:70, tCO2:850,  zone:'Zone-9', color:'#60a5fa'},
+];
+const cropDevices={}, cropHistory={}, cropLogs={};
+const HIST=45, CPTS=40;
+const EMOJIS={Vegetable:'🥦',Fruit:'🍅',Herb:'🌿','Leafy Green':'🥬',Flower:'🌸','Root Crop':'🥕',Grain:'🌾'};
+let env={temp:24.3,hum:68,co2:820,light:540};
+let gCtrl={hvac:true,irr:true,light:false,co2:true};
+let envTick=0; // used for sine wave phases
+// Pre-fill cData with a wavy initial history so chart isn't flat from the start
+let cData={
+  temp: Array.from({length:CPTS},(_,i)=>24+Math.sin(i*0.4)*4+Math.sin(i*0.15)*2+(Math.random()-.5)*1.5),
+  hum:  Array.from({length:CPTS},(_,i)=>68+Math.sin(i*0.35+1)*10+Math.sin(i*0.2+0.5)*5+(Math.random()-.5)*2),
+  co2:  Array.from({length:CPTS},(_,i)=>82+Math.sin(i*0.3+2)*8+Math.sin(i*0.12)*4+(Math.random()-.5)*2),
+};
+let spCtx={};
+
+// ═══════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════
+function tickClock(){
+  document.getElementById('clockEl').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false});
+  const u=Math.floor((Date.now()-startTime)/1000);
+  document.getElementById('statUptime').textContent=`${pad(Math.floor(u/3600))}:${pad(Math.floor((u%3600)/60))}:${pad(u%60)}`;
+}
+function pad(n){return String(n).padStart(2,'0');}
+setInterval(tickClock,1000); tickClock();
+
+// ═══════════════════════════════════
+// ENV SIMULATION
+// ═══════════════════════════════════
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function tickEnv(){
+  envTick++;
+  // Sine-wave oscillation: each metric has its own frequency + phase + noise
+  // Temp: slow wave ±4°C + medium wave ±1.5°C + noise
+  const baseTemp = 24 + Math.sin(envTick*0.18)*4 + Math.sin(envTick*0.07+1)*1.5;
+  env.temp = clamp(baseTemp + (Math.random()-.5)*1.2 + (gCtrl.hvac?-0.5:0.8), 15, 38);
+  // Humidity: medium wave ±12% + fast ripple ±3%
+  const baseHum = 67 + Math.sin(envTick*0.14+2)*12 + Math.sin(envTick*0.28+0.5)*3;
+  env.hum  = clamp(baseHum  + (Math.random()-.5)*2   + (gCtrl.irr?0.3:-0.5),  30, 95);
+  // CO2: slow drift wave ±80ppm + medium ±30ppm
+  const baseCO2 = 820 + Math.sin(envTick*0.11+1.5)*80 + Math.sin(envTick*0.22+3)*30;
+  env.co2  = clamp(baseCO2  + (Math.random()-.5)*20  + (gCtrl.co2?5:-8),      350,1800);
+  // Light: fast sine simulating natural fluctuation
+  const baseLight = 500 + Math.sin(envTick*0.2+1)*200 + Math.sin(envTick*0.45)*60;
+  env.light= clamp(baseLight + (Math.random()-.5)*30  + (gCtrl.light?80:-30),   0, 1000);
+  function sc(v,lo,hi){return v<lo||v>hi?(v<lo*.85||v>hi*1.15?'alert':'warn'):'ok';}
+  setMet('sTemp',env.temp.toFixed(1)+'°C','sTempB',env.temp,15,38,sc(env.temp,18,28));
+  setMet('sHum', env.hum.toFixed(0)+'%', 'sHumB', env.hum, 30,95, sc(env.hum,50,80));
+  setMet('sCO2', Math.round(env.co2)+' ppm','sCO2B',env.co2,350,1800,sc(env.co2,600,1200));
+  setMet('sLight',Math.round(env.light),'sLightB',env.light,0,1000,sc(env.light,200,800));
+  cData.temp.push(env.temp); cData.hum.push(env.hum); cData.co2.push(env.co2/10);
+  if(cData.temp.length>CPTS){cData.temp.shift();cData.hum.shift();cData.co2.shift();}
+  drawEnvChart();
+  crops.forEach(c=>{
+    if(!cropHistory[c.id]) initHistory(c.id);
+    const h=cropHistory[c.id];
+    h.temp.push(env.temp+(Math.random()-.5)*.5); if(h.temp.length>HIST) h.temp.shift();
+    h.hum.push(env.hum+(Math.random()-.5)*1);    if(h.hum.length>HIST)  h.hum.shift();
+    h.co2.push(env.co2+(Math.random()-.5)*10);    if(h.co2.length>HIST)  h.co2.shift();
+    c.growth    =Math.min(100,c.growth+Math.random()*.02);
+    c.waterLevel=Math.max(0,c.waterLevel-Math.random()*.05+(cropDevices[c.id]&&cropDevices[c.id].pump?.25:0));
+    const stress=Math.abs(env.temp-c.tTemp)/5+Math.abs(env.hum-c.tHum)/30;
+    c.health    =clamp(c.health-stress*.01+(c.waterLevel>20?.01:-.05),0,100);
+  });
+  updateDashCards(); updateStats(); checkAlerts();
+  if(activeCropId) refreshCropPage();
+}
+setInterval(tickEnv,1200);
+
+// Load preset crops on startup
+function loadPresetCrops(){
+  PRESET_CROPS.forEach((p,i)=>{
+    const crop={
+      id: Date.now()+i,
+      name:p.name, type:p.type, stage:p.stage, zone:p.zone, color:p.color,
+      tTemp:p.tTemp, tHum:p.tHum, tCO2:p.tCO2,
+      health:75+Math.random()*20,
+      growth:15+Math.random()*60,
+      waterLevel:45+Math.random()*45,
+      addedAt:'preloaded',
+    };
+    crops.push(crop);
+    initHistory(crop.id);
+    initDevices(crop.id);
+    addLog(crop.id,'#4ade80','Crop zone loaded from configuration');
+  });
+  renderCropGrid();
+  updateStats();
+}
+setTimeout(loadPresetCrops, 200);
+
+function setMet(vi,v,bi,raw,mn,mx,cls){
+  const e=document.getElementById(vi); if(!e) return;
+  e.textContent=v; e.className='met-val '+cls;
+  const b=document.getElementById(bi); if(b) b.style.width=clamp((raw-mn)/(mx-mn)*100,0,100)+'%';
+}
+
+// ═══════════════════════════════════
+// ENV CHART
+// ═══════════════════════════════════
+let envCvs,envCtx2;
+function initEnvChart(){
+  envCvs=document.getElementById('envChart');
+  envCtx2=envCvs.getContext('2d');
+  envCvs.width=envCvs.offsetWidth; envCvs.height=160;
+}
+function drawEnvChart(){
+  if(!envCtx2) return;
+  const W=envCvs.width,H=envCvs.height;
+  envCtx2.clearRect(0,0,W,H);
+  envCtx2.strokeStyle='rgba(255,255,255,0.04)';envCtx2.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=H*i/4;envCtx2.beginPath();envCtx2.moveTo(0,y);envCtx2.lineTo(W,y);envCtx2.stroke();}
+  function drawLine(data,col,mn,mx){
+    if(data.length<2) return;
+    envCtx2.beginPath();envCtx2.strokeStyle=col;envCtx2.lineWidth=2;
+    envCtx2.shadowColor=col;envCtx2.shadowBlur=7;
+    data.forEach((v,i)=>{const x=(i/(CPTS-1))*W,y=H-((v-mn)/(mx-mn))*(H*.8)-H*.1;i?envCtx2.lineTo(x,y):envCtx2.moveTo(x,y);});
+    envCtx2.stroke();envCtx2.shadowBlur=0;
+    envCtx2.beginPath();
+    data.forEach((v,i)=>{const x=(i/(CPTS-1))*W,y=H-((v-mn)/(mx-mn))*(H*.8)-H*.1;i?envCtx2.lineTo(x,y):envCtx2.moveTo(x,y);});
+    envCtx2.lineTo(W,H);envCtx2.lineTo(0,H);envCtx2.closePath();
+    const g=envCtx2.createLinearGradient(0,0,0,H);
+    const r=parseInt(col.slice(1,3),16),g2=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);
+    g.addColorStop(0,`rgba(${r},${g2},${b},0.15)`);g.addColorStop(1,`rgba(${r},${g2},${b},0)`);
+    envCtx2.fillStyle=g;envCtx2.fill();
+  }
+  // Use dynamic min/max so waves fill the chart vertically
+  const tMin=Math.min(...cData.temp)-2, tMax=Math.max(...cData.temp)+2;
+  const hMin=Math.min(...cData.hum)-3,  hMax=Math.max(...cData.hum)+3;
+  const cMin=Math.min(...cData.co2)-2,  cMax=Math.max(...cData.co2)+2;
+  drawLine(cData.temp,'#4ade80',tMin,tMax);
+  drawLine(cData.hum,'#60a5fa',hMin,hMax);
+  drawLine(cData.co2,'#2dd4bf',cMin,cMax);
+}
+window.addEventListener('resize',()=>{if(envCvs){envCvs.width=envCvs.offsetWidth;drawEnvChart();}});
+setTimeout(initEnvChart,100);
+
+// ═══════════════════════════════════
+// CROP HELPERS
+// ═══════════════════════════════════
+function initHistory(id){
+  cropHistory[id]={temp:Array.from({length:HIST},()=>env.temp+(Math.random()-.5)*2),hum:Array.from({length:HIST},()=>env.hum+(Math.random()-.5)*5),co2:Array.from({length:HIST},()=>env.co2+(Math.random()-.5)*30)};
+}
+function initDevices(id){cropDevices[id]={fan:false,heat:false,hum:false,co2:true,pump:false};}
+function addLog(id,color,text){
+  if(!cropLogs[id]) cropLogs[id]=[];
+  cropLogs[id].unshift({time:new Date().toLocaleTimeString('en-GB',{hour12:false}),text,color});
+  if(cropLogs[id].length>50) cropLogs[id].pop();
+}
+function statusInfo(c){
+  const d=Math.abs(env.temp-c.tTemp)+Math.abs(env.hum-c.tHum)/10+Math.abs(env.co2-c.tCO2)/100;
+  if(d>8) return ['Critical','s-crit'];
+  if(d>3) return ['Warning','s-warn'];
+  return ['Optimal','s-ok'];
+}
+function hc(c){return c.health>75?'#4ade80':c.health>50?'#fbbf24':'#f87171';}
+function tc(c){return Math.abs(env.temp-c.tTemp)>4?'var(--red)':Math.abs(env.temp-c.tTemp)>2?'var(--amber)':'var(--green)';}
+function huc(c){return Math.abs(env.hum-c.tHum)>15?'var(--red)':Math.abs(env.hum-c.tHum)>7?'var(--amber)':'var(--blue)';}
+function co2c(c){return Math.abs(env.co2-c.tCO2)>300?'var(--red)':Math.abs(env.co2-c.tCO2)>150?'var(--amber)':'var(--teal)';}
+function growthNote(g){return g<30?'Early stage':g<60?'Growing well':g<90?'Nearly ready':'Ready to harvest!';}
+function healthNote(h){return h>80?'Excellent condition':h>60?'Good — monitor':'Needs attention!';}
+function waterNote(w){return w>60?'Well hydrated':w>30?'Adequate':'Low — needs water soon';}
+
+// ═══════════════════════════════════
+// MODAL
+// ═══════════════════════════════════
+function openModal(){document.getElementById('iZone').value='Zone-'+(crops.length+1);document.getElementById('addModal').classList.add('open');}
+function closeModal(){document.getElementById('addModal').classList.remove('open');}
+document.getElementById('addModal').addEventListener('click',e=>{if(e.target===document.getElementById('addModal'))closeModal();});
+function pickColor(el){document.querySelectorAll('.col-opt').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');selectedColor=el.dataset.c;}
+
+function addCrop(){
+  const name=document.getElementById('iName').value.trim();
+  if(!name){document.getElementById('iName').style.borderColor='var(--red)';return;}
+  document.getElementById('iName').style.borderColor='';
+  const crop={id:Date.now(),name,type:document.getElementById('iType').value,stage:document.getElementById('iStage').value,zone:document.getElementById('iZone').value||'Zone-1',color:selectedColor,tTemp:parseFloat(document.getElementById('iTemp').value)||22,tHum:parseFloat(document.getElementById('iHum').value)||65,tCO2:parseFloat(document.getElementById('iCO2').value)||800,health:70+Math.random()*30,growth:10+Math.random()*50,waterLevel:40+Math.random()*50,addedAt:new Date().toLocaleTimeString('en-GB',{hour12:false})};
+  crops.push(crop);
+  initHistory(crop.id); initDevices(crop.id);
+  addLog(crop.id,'#4ade80','Crop zone created');
+  renderCropGrid(); closeModal(); document.getElementById('iName').value='';
+}
+
+// ═══════════════════════════════════
+// DASHBOARD CROP GRID
+// ═══════════════════════════════════
+function renderCropGrid(){
+  const grid=document.getElementById('cropGrid');
+  document.getElementById('cropCountEl').textContent=`${crops.length} crop${crops.length!==1?'s':''}`;
+  if(crops.length===0){grid.innerHTML=`<div class="empty-state"><div class="empty-icon">🌱</div><div class="empty-text">No crops yet.<br>Click "+ Add Crop" to begin.</div></div>`;return;}
+  const empty=grid.querySelector('.empty-state'); if(empty) empty.remove();
+  crops.forEach(c=>{
+    if(!document.getElementById('cc-'+c.id)){
+      const d=document.createElement('div');d.innerHTML=makeCCHtml(c);grid.appendChild(d.firstElementChild);
+    }
+  });
+  grid.querySelectorAll('.crop-card').forEach(el=>{if(!crops.find(c=>'cc-'+c.id===el.id))el.remove();});
+}
+function makeCCHtml(c){
+  const [st,sc]=statusInfo(c);
+  return `<div class="crop-card" id="cc-${c.id}" onclick="openCropPage(${c.id})">
+    <div class="cc-accent" style="background:${c.color}"></div>
+    <div class="cc-body">
+      <div class="cc-top">
+        <div><div class="cc-name">${c.name}</div><div class="cc-meta">${c.type} · ${c.zone} · ${c.stage}</div></div>
+        <div class="${sc} status-pill" data-st>${st}</div>
+      </div>
+      <div class="mini-mets">
+        <div class="mm"><div class="mm-lbl">Temp</div><div class="mm-val" data-t style="color:${tc(c)}">${env.temp.toFixed(1)}°</div></div>
+        <div class="mm"><div class="mm-lbl">Hum</div><div class="mm-val" data-h style="color:${huc(c)}">${env.hum.toFixed(0)}%</div></div>
+        <div class="mm"><div class="mm-lbl">CO₂</div><div class="mm-val" data-c style="color:${co2c(c)}">${Math.round(env.co2)}</div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-lbl"><span>Health</span><span data-hv>${c.health.toFixed(0)}%</span></div>
+        <div class="mini-bar"><div class="mini-bar-fill" data-hb style="width:${c.health}%;background:${hc(c)}"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-lbl"><span>Water</span><span data-wv>${c.waterLevel.toFixed(0)}%</span></div>
+        <div class="mini-bar"><div class="mini-bar-fill" data-wb style="width:${c.waterLevel}%;background:var(--blue)"></div></div>
+      </div>
+      <div class="cc-footer"><span>Added ${c.addedAt}</span><span class="hint">Tap for details →</span></div>
+    </div>
+  </div>`;
+}
+function updateDashCards(){
+  crops.forEach(c=>{
+    const el=document.getElementById('cc-'+c.id); if(!el) return;
+    const [st,sc]=statusInfo(c);
+    el.querySelector('[data-st]').className=`${sc} status-pill`;el.querySelector('[data-st]').textContent=st;
+    el.querySelector('[data-t]').textContent=env.temp.toFixed(1)+'°';el.querySelector('[data-t]').style.color=tc(c);
+    el.querySelector('[data-h]').textContent=env.hum.toFixed(0)+'%';el.querySelector('[data-h]').style.color=huc(c);
+    el.querySelector('[data-c]').textContent=Math.round(env.co2);el.querySelector('[data-c]').style.color=co2c(c);
+    el.querySelector('[data-hv]').textContent=c.health.toFixed(0)+'%';
+    el.querySelector('[data-hb]').style.width=c.health+'%';el.querySelector('[data-hb]').style.background=hc(c);
+    el.querySelector('[data-wv]').textContent=c.waterLevel.toFixed(0)+'%';
+    el.querySelector('[data-wb]').style.width=c.waterLevel+'%';
+  });
+}
+
+// ═══════════════════════════════════
+// STATS & ALERTS
+// ═══════════════════════════════════
+function updateStats(){
+  document.getElementById('statCrops').textContent=crops.length;
+  document.getElementById('statHealth').textContent=crops.length?(crops.reduce((s,c)=>s+c.health,0)/crops.length).toFixed(0)+'%':'—';
+  document.getElementById('statAlerts').textContent=alertCount;
+}
+function checkAlerts(){
+  const a=[];
+  if(env.temp>32) a.push(`High temp: ${env.temp.toFixed(1)}°C`);
+  if(env.hum>88)  a.push(`Humidity: ${env.hum.toFixed(0)}%`);
+  if(env.co2>1500) a.push(`CO₂ spike: ${Math.round(env.co2)} ppm`);
+  crops.forEach(c=>{if(c.health<30)a.push(`${c.name}: Low health`);});
+  alertCount=a.length;
+  const bar=document.getElementById('alertBar');
+  if(a.length){bar.classList.add('show');document.getElementById('alertTxt').textContent=a[0]+(a.length>1?` (+${a.length-1} more)`:'')}
+  else bar.classList.remove('show');
+}
+function dashToggle(btn,k){btn.classList.toggle('active');gCtrl[k]=btn.classList.contains('active');}
+
+// ═══════════════════════════════════
+// NAVIGATION  ← THE KEY PART
+// ═══════════════════════════════════
+function openCropPage(cropId){
+  const c=crops.find(x=>x.id===cropId); if(!c) return;
+  activeCropId=cropId;
+  addLog(cropId,'#4ade80','Opened crop detail page');
+  document.getElementById('cpHdrName').textContent=c.name;
+  buildCropPage(c);
+  // SLIDE: dashboard slides left, crop page slides in from right
+  document.getElementById('dashPage').classList.add('slide-out');
+  document.getElementById('cropPage').classList.add('slide-in');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>initSparklines(c),150);
+}
+
+function goBack(){
+  document.getElementById('dashPage').classList.remove('slide-out');
+  document.getElementById('cropPage').classList.remove('slide-in');
+  activeCropId=null;
+  spCtx={};
+}
+
+// ═══════════════════════════════════
+// BUILD CROP DETAIL PAGE
+// ═══════════════════════════════════
+function buildCropPage(c){
+  const emoji=EMOJIS[c.type]||'🌱';
+  const [st,sc]=statusInfo(c);
+  document.getElementById('cpBody').innerHTML=`
+
+  <!-- HERO -->
+  <div class="cp-hero" style="border-left:4px solid ${c.color}">
+    <div class="cp-hero-glow" style="background:${c.color}"></div>
+    <div class="cp-hero-row">
+      <div class="cp-hero-left">
+        <div class="cp-emoji">${emoji}</div>
+        <div>
+          <div class="cp-name" style="color:${c.color}">${c.name}</div>
+          <div class="cp-meta-txt">Zone ${c.zone} · Added ${c.addedAt}</div>
+          <div class="cp-badges">
+            <span class="cp-badge bd-type">${c.type}</span>
+            <span class="cp-badge bd-zone">${c.zone}</span>
+            <span class="cp-badge bd-stage">${c.stage}</span>
+          </div>
+        </div>
+      </div>
+      <div class="${sc} status-pill" id="cpStatusEl" style="font-size:0.75rem;padding:7px 16px;">${st}</div>
+    </div>
+  </div>
+
+  <!-- LIVE SENSORS -->
+  <div class="cp-sec">Live Sensor Readings</div>
+  <div class="sensor-grid">
+    <div class="sensor-card" onclick="showSensorChart(${c.id},'temp')">
+      <div class="sc-stripe" style="background:#f87171"></div>
+      <div class="sc-icon">🌡</div>
+      <div class="sc-label">Temperature</div>
+      <div class="sc-value" id="sv-temp" style="color:#f87171">${env.temp.toFixed(1)}°C</div>
+      <div class="sc-tgt">Target ${c.tTemp}°C <span class="sc-diff" id="sd-temp"></span></div>
+      <div class="sc-spark"><canvas class="spark" id="sp-temp"></canvas></div>
+    </div>
+    <div class="sensor-card" onclick="showSensorChart(${c.id},'hum')">
+      <div class="sc-stripe" style="background:#60a5fa"></div>
+      <div class="sc-icon">💧</div>
+      <div class="sc-label">Humidity</div>
+      <div class="sc-value" id="sv-hum" style="color:#60a5fa">${env.hum.toFixed(0)}%</div>
+      <div class="sc-tgt">Target ${c.tHum}% <span class="sc-diff" id="sd-hum"></span></div>
+      <div class="sc-spark"><canvas class="spark" id="sp-hum"></canvas></div>
+    </div>
+    <div class="sensor-card" onclick="showSensorChart(${c.id},'co2')">
+      <div class="sc-stripe" style="background:#2dd4bf"></div>
+      <div class="sc-icon">🌿</div>
+      <div class="sc-label">CO₂ Level</div>
+      <div class="sc-value" id="sv-co2" style="color:#2dd4bf">${Math.round(env.co2)} ppm</div>
+      <div class="sc-tgt">Target ${c.tCO2} ppm <span class="sc-diff" id="sd-co2"></span></div>
+      <div class="sc-spark"><canvas class="spark" id="sp-co2"></canvas></div>
+    </div>
+  </div>
+
+  <!-- PLANT STATUS -->
+  <div class="cp-sec">Plant Status</div>
+  <div class="sb-grid">
+    <div class="sb-card">
+      <div class="sb-top"><div class="sb-lbl">🌱 Growth</div><div class="sb-val" id="sv-gr" style="color:${c.color}">${c.growth.toFixed(1)}%</div></div>
+      <div class="sb-bar"><div class="sb-fill" id="sb-grb" style="width:${c.growth}%;background:${c.color}"></div></div>
+      <div class="sb-note" id="sn-gr">${growthNote(c.growth)}</div>
+    </div>
+    <div class="sb-card">
+      <div class="sb-top"><div class="sb-lbl">❤ Health</div><div class="sb-val" id="sv-hl" style="color:${hc(c)}">${c.health.toFixed(1)}%</div></div>
+      <div class="sb-bar"><div class="sb-fill" id="sb-hlb" style="width:${c.health}%;background:${hc(c)}"></div></div>
+      <div class="sb-note" id="sn-hl">${healthNote(c.health)}</div>
+    </div>
+    <div class="sb-card">
+      <div class="sb-top"><div class="sb-lbl">💧 Water</div><div class="sb-val" id="sv-wl" style="color:#60a5fa">${c.waterLevel.toFixed(1)}%</div></div>
+      <div class="sb-bar"><div class="sb-fill" id="sb-wlb" style="width:${c.waterLevel}%;background:#60a5fa"></div></div>
+      <div class="sb-note" id="sn-wl">${waterNote(c.waterLevel)}</div>
+    </div>
+  </div>
+
+  <!-- CONTROL SYSTEM ACTIONS -->
+  <div class="cp-sec">Control System Actions</div>
+  <div class="dev-grid">
+    ${devCardHtml(c.id,'fan','🌀','Cooling Fan','Reduces temperature & improves air circulation','fan',false)}
+    ${devCardHtml(c.id,'heat','🔥','Heater','Raises ambient temp during cold cycles','heat',false)}
+    ${devCardHtml(c.id,'hum','💧','Humidifier','Maintains moisture for optimal transpiration','hum',false)}
+    ${devCardHtml(c.id,'co2','🌿','CO₂ Injector','Enriches atmosphere to boost photosynthesis','co2',true)}
+    ${devCardHtml(c.id,'pump','⛽','Water Pump','Drives drip irrigation & nutrient delivery','pump',false)}
+  </div>
+
+  <!-- QUICK ACTIONS -->
+  <div class="cp-sec">Quick Actions</div>
+  <div class="qa-row">
+    <button class="qa-btn water" onclick="cpWater(${c.id})">💧 Water Now</button>
+    <button class="qa-btn fert"  onclick="cpFertilize(${c.id})">🌿 Fertilize</button>
+    <button class="qa-btn del"   onclick="cpDelete(${c.id})">✕ Remove Crop</button>
+  </div>
+
+  <!-- ACTIVITY LOG -->
+  <div class="cp-sec">Activity Log</div>
+  <div class="act-log">
+    <div class="act-list" id="actList-${c.id}"></div>
+  </div>
+  `;
+  renderLog(c.id);
+}
+
+// device card html
+function devCardHtml(cropId,key,icon,name,desc,cls,startOn){
+  const on=cropDevices[cropId]?cropDevices[cropId][key]:startOn;
+  return `<div class="dev-card ${cls}${on?' on':''}" id="dev-${cropId}-${key}">
+    <div class="dc-top"><div class="dc-icon">${icon}</div>
+      <label class="tgl ${cls}"><input type="checkbox" ${on?'checked':''} onchange="toggleDev(${cropId},'${key}',this)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="dc-name">${name}</div>
+    <div class="dc-desc">${desc}</div>
+    <div class="dc-status"><div class="dc-dot"></div><span class="dc-stat-txt" id="dstat-${cropId}-${key}">${on?liveDevText(key):'Idle — standby'}</span></div>
+  </div>`;
+}
+function liveDevText(k){
+  return {fan:`Cooling — ${env.temp.toFixed(1)}°C`,heat:`Heating — ${env.temp.toFixed(1)}°C`,hum:`Misting — ${env.hum.toFixed(0)}%`,co2:`Injecting — ${Math.round(env.co2)} ppm`,pump:'Pumping — irrigation active'}[k]||'Running';
+}
+function toggleDev(cropId,key,chk){
+  if(!cropDevices[cropId]) return;
+  cropDevices[cropId][key]=chk.checked;
+  const card=document.getElementById(`dev-${cropId}-${key}`);
+  const stat=document.getElementById(`dstat-${cropId}-${key}`);
+  const cols={fan:'#60a5fa',heat:'#f87171',hum:'#2dd4bf',co2:'#4ade80',pump:'#fbbf24'};
+  if(chk.checked){card.classList.add('on');stat.textContent=liveDevText(key);addLog(cropId,cols[key]||'#4ade80',`${key.charAt(0).toUpperCase()+key.slice(1)} turned ON`);}
+  else{card.classList.remove('on');stat.textContent='Idle — standby';addLog(cropId,'#7a9a7a',`${key.charAt(0).toUpperCase()+key.slice(1)} turned OFF`);}
+  renderLog(cropId);
+}
+
+// ═══════════════════════════════════
+// SPARKLINES
+// ═══════════════════════════════════
+function initSparklines(c){
+  ['temp','hum','co2'].forEach(m=>{
+    const cv=document.getElementById('sp-'+m); if(!cv) return;
+    cv.width=cv.offsetWidth||300; cv.height=46;
+    spCtx[m]=cv.getContext('2d');
+  });
+}
+function drawSpark(ctx,data,hex){
+  if(!ctx||data.length<2) return;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;
+  const sy=v=>H-((v-mn)/rng)*(H*.8)-H*.1;
+  ctx.beginPath();data.forEach((v,i)=>{const x=(i/(data.length-1))*W;i?ctx.lineTo(x,sy(v)):ctx.moveTo(x,sy(v));});
+  ctx.strokeStyle=hex;ctx.lineWidth=2;ctx.shadowColor=hex;ctx.shadowBlur=6;ctx.stroke();ctx.shadowBlur=0;
+  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();
+  const g=ctx.createLinearGradient(0,0,0,H);
+  const r=parseInt(hex.slice(1,3),16),g2=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  g.addColorStop(0,`rgba(${r},${g2},${b},0.25)`);g.addColorStop(1,`rgba(${r},${g2},${b},0)`);
+  ctx.fillStyle=g;ctx.fill();
+}
+
+// ═══════════════════════════════════
+// REFRESH CROP PAGE (every tick)
+// ═══════════════════════════════════
+function refreshCropPage(){
+  const c=crops.find(x=>x.id===activeCropId); if(!c) return;
+  const h=cropHistory[c.id]; if(!h) return;
+  // Sparklines
+  drawSpark(spCtx['temp'],h.temp,'#f87171');
+  drawSpark(spCtx['hum'], h.hum, '#60a5fa');
+  drawSpark(spCtx['co2'], h.co2, '#2dd4bf');
+  // Live values
+  const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  s('sv-temp',env.temp.toFixed(1)+'°C');
+  s('sv-hum', env.hum.toFixed(0)+'%');
+  s('sv-co2', Math.round(env.co2)+' ppm');
+  // Diffs
+  function setDiff(id,val,unit,thresh){
+    const e=document.getElementById(id);if(!e)return;
+    const n=parseFloat(val);
+    e.textContent=(n>=0?'+':'')+val+unit;
+    e.style.cssText=`padding:2px 8px;border-radius:3px;font-size:0.58rem;font-weight:700;background:${Math.abs(n)<thresh?'rgba(74,222,128,0.15)':Math.abs(n)<thresh*2?'rgba(251,191,36,0.15)':'rgba(248,113,113,0.15)'};color:${Math.abs(n)<thresh?'#4ade80':Math.abs(n)<thresh*2?'#fbbf24':'#f87171'};`;
+  }
+  setDiff('sd-temp',(env.temp-c.tTemp).toFixed(1),'°',2);
+  setDiff('sd-hum', (env.hum-c.tHum).toFixed(0),'%',8);
+  setDiff('sd-co2', String(Math.round(env.co2-c.tCO2)),' ppm',100);
+  // Progress
+  const hcol=hc(c);
+  s('sv-gr',c.growth.toFixed(1)+'%');s('sv-hl',c.health.toFixed(1)+'%');s('sv-wl',c.waterLevel.toFixed(1)+'%');
+  s('sn-gr',growthNote(c.growth));s('sn-hl',healthNote(c.health));s('sn-wl',waterNote(c.waterLevel));
+  const sb=(id,w,bg)=>{const e=document.getElementById(id);if(e){e.style.width=w+'%';if(bg)e.style.background=bg;}};
+  sb('sb-grb',c.growth,c.color);sb('sb-hlb',c.health,hcol);sb('sb-wlb',c.waterLevel,'#60a5fa');
+  document.getElementById('sv-hl').style.color=hcol;
+  // Status pill
+  const [st,sc]=statusInfo(c);
+  const sp=document.getElementById('cpStatusEl');
+  if(sp){sp.className=`${sc} status-pill`;sp.style.cssText='font-size:0.75rem;padding:7px 16px;';sp.textContent=st;}
+  // Device live text
+  ['fan','heat','hum','co2','pump'].forEach(k=>{
+    if(cropDevices[c.id]&&cropDevices[c.id][k]){const e=document.getElementById(`dstat-${c.id}-${k}`);if(e)e.textContent=liveDevText(k);}
+  });
+}
+
+// ═══════════════════════════════════
+// QUICK ACTIONS
+// ═══════════════════════════════════
+function cpWater(id){const c=crops.find(x=>x.id===id);if(c){c.waterLevel=Math.min(100,c.waterLevel+20);addLog(id,'#60a5fa','Manual irrigation — +20% water');renderLog(id);}}
+function cpFertilize(id){const c=crops.find(x=>x.id===id);if(c){c.health=Math.min(100,c.health+10);addLog(id,'#4ade80','Fertilizer applied — +10% health');renderLog(id);}}
+function cpDelete(id){if(!confirm('Remove this crop zone?'))return;crops=crops.filter(c=>c.id!==id);renderCropGrid();updateStats();goBack();}
+function renderLog(id){
+  const el=document.getElementById('actList-'+id);if(!el)return;
+  const logs=cropLogs[id]||[];
+  el.innerHTML=logs.length===0?`<div class="act-item"><span class="act-text" style="color:var(--text-muted)">No activity yet.</span></div>`:logs.map(l=>`<div class="act-item"><div class="act-dot" style="background:${l.color}"></div><span class="act-time">${l.time}</span><span class="act-text">${l.text}</span></div>`).join('');
+}
+
+// ═══════════════════════════════════
+// SENSOR CHART POPUP
+// ═══════════════════════════════════
+function showSensorChart(cropId,metric){
+  const c=crops.find(x=>x.id===cropId);if(!c)return;
+  const h=cropHistory[cropId];if(!h)return;
+  const data=h[metric];
+  const target=metric==='temp'?c.tTemp:metric==='hum'?c.tHum:c.tCO2;
+  const unit=metric==='temp'?'°C':metric==='hum'?'%':' ppm';
+  const col=metric==='temp'?'#f87171':metric==='hum'?'#60a5fa':'#2dd4bf';
+  const lbl=metric==='temp'?'Temperature':metric==='hum'?'Humidity':'CO₂';
+  const cur=data[data.length-1];
+  const mn=Math.min(...data),mx=Math.max(...data);
+  const th={lo:target-(metric==='temp'?3:metric==='hum'?10:150),hi:target+(metric==='temp'?3:metric==='hum'?10:150)};
+  let ov=document.getElementById('sChartOv');
+  if(!ov){ov=document.createElement('div');ov.id='sChartOv';document.body.appendChild(ov);}
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(12px);z-index:400;display:flex;align-items:center;justify-content:center;';
+  ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};
+  ov.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.75rem;width:540px;max-width:96vw;position:relative;">
+    <button onclick="document.getElementById('sChartOv').style.display='none'" style="position:absolute;top:1rem;right:1rem;width:30px;height:30px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:1rem;">✕</button>
+    <div style="font-family:'Space Mono',monospace;font-size:0.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px;">${c.name} · ${lbl}</div>
+    <div style="font-family:'Space Mono',monospace;font-size:2rem;font-weight:700;color:${col};margin-bottom:1.25rem;">${metric==='temp'?cur.toFixed(1):Math.round(cur)}${unit}</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem;">
+      <canvas id="sDetailCvs" style="width:100%;height:190px;display:block;"></canvas>
+    </div>
+    <div style="display:flex;gap:1.5rem;font-family:'Space Mono',monospace;font-size:0.62rem;flex-wrap:wrap;margin-bottom:1rem;">
+      <span style="color:var(--text-dim)">Target: <b style="color:${col}">${target}${unit}</b></span>
+      <span style="color:var(--text-dim)">Min: <b style="color:var(--text)">${metric==='temp'?mn.toFixed(1):Math.round(mn)}${unit}</b></span>
+      <span style="color:var(--text-dim)">Max: <b style="color:var(--text)">${metric==='temp'?mx.toFixed(1):Math.round(mx)}${unit}</b></span>
+    </div>
+    <div style="display:flex;gap:1rem;font-family:'Space Mono',monospace;font-size:0.58rem;flex-wrap:wrap;">
+      <span style="color:var(--text-dim);display:flex;align-items:center;gap:6px;"><span style="width:14px;height:4px;border-radius:2px;background:#4ade80;display:inline-block;"></span>Optimal</span>
+      <span style="color:var(--text-dim);display:flex;align-items:center;gap:6px;"><span style="width:14px;height:4px;border-radius:2px;background:#f87171;display:inline-block;"></span>Too high</span>
+      <span style="color:var(--text-dim);display:flex;align-items:center;gap:6px;"><span style="width:14px;height:4px;border-radius:2px;background:#60a5fa;display:inline-block;"></span>Cooling active</span>
+    </div>
+  </div>`;
+  setTimeout(()=>{
+    const cv=document.getElementById('sDetailCvs');
+    cv.width=cv.offsetWidth||480; cv.height=190;
+    const ctx=cv.getContext('2d');
+    const W=cv.width,H=cv.height;
+    const mn2=Math.min(...data)-(metric==='co2'?30:2),mx2=Math.max(...data)+(metric==='co2'?30:2);
+    const sy=v=>H-((v-mn2)/(mx2-mn2))*(H*.8)-H*.1;
+    // optimal zone
+    ctx.fillStyle='rgba(74,222,128,0.05)';
+    const y1=sy(Math.min(th.hi,mx2)),y2=sy(Math.max(th.lo,mn2));ctx.fillRect(0,y1,W,y2-y1);
+    // grid
+    ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;
+    for(let i=0;i<=5;i++){const y=H*i/5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    // target line
+    ctx.setLineDash([5,5]);ctx.strokeStyle='rgba(74,222,128,0.3)';ctx.lineWidth=1.5;
+    const ty=sy(target);ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(74,222,128,0.7)';ctx.font='9px monospace';ctx.fillText('Target: '+target+unit,6,ty-4);
+    // segmented color line
+    const mid=th.lo+(th.hi-th.lo)*.5;
+    for(let i=1;i<data.length;i++){
+      const x0=((i-1)/(data.length-1))*W,x1=(i/(data.length-1))*W;
+      const v=data[i];
+      const lc=v>th.hi?'#f87171':v>mid?'#60a5fa':v<th.lo?'#60a5fa':'#4ade80';
+      ctx.beginPath();ctx.strokeStyle=lc;ctx.lineWidth=2.5;ctx.shadowColor=lc;ctx.shadowBlur=6;
+      ctx.moveTo(x0,sy(data[i-1]));ctx.lineTo(x1,sy(v));ctx.stroke();ctx.shadowBlur=0;
+    }
+    // live dot
+    const lx=W,ly=sy(data[data.length-1]);
+    ctx.beginPath();ctx.arc(lx,ly,5,0,Math.PI*2);
+    ctx.fillStyle='#fbbf24';ctx.shadowColor='#fbbf24';ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+  },60);
+}
+
+
+
+
+// ═══════════════════════════════════════════════════════
+// SMART AUTO-CORRECTION ENGINE — runs silently in background
+// Checks every 30 minutes. No UI popups. Logs to activity only.
+// ═══════════════════════════════════════════════════════
+
+const activeAlarms = {}; // { 'cropId-metric': lastTriggeredTime }
+const ALARM_THRESH  = { temp:4, hum:12, co2:200, water:25 };
+const CORRECT_SPEED = { temp:0.5, hum:1.0, co2:18, water:2 };
+const AUTO_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+function metricLabel(m){return{temp:'Temperature',hum:'Humidity',co2:'CO₂ Level',water:'Water Level'}[m]||m;}
+function fmtVal(m,v){return m==='temp'?v.toFixed(1):Math.round(v);}
+function autoActionLabel(metric,isHigh){
+  return ({
+    'temp-high':'Cooling Fan activated',
+    'temp-low' :'Heater activated',
+    'hum-high' :'Fan + Dehumidifier activated',
+    'hum-low'  :'Humidifier activated',
+    'co2-high' :'CO₂ Injector paused',
+    'co2-low'  :'CO₂ Injector activated',
+    'water-low':'Water Pump activated',
+  })[metric+'-'+(isHigh?'high':'low')]||'System correction applied';
+}
+
+function runAutoCorrection(){
+  const now = Date.now();
+  crops.forEach(c => {
+    const h = cropHistory[c.id]; if(!h) return;
+    const curTemp  = h.temp.length ? h.temp[h.temp.length-1] : env.temp;
+    const curHum   = h.hum.length  ? h.hum[h.hum.length-1]  : env.hum;
+    const curCO2   = h.co2.length  ? h.co2[h.co2.length-1]  : env.co2;
+    const curWater = c.waterLevel;
+
+    [
+      {metric:'temp',  current:curTemp,  target:c.tTemp, unit:'°C'},
+      {metric:'hum',   current:curHum,   target:c.tHum,  unit:'%'},
+      {metric:'co2',   current:curCO2,   target:c.tCO2,  unit:' ppm'},
+      {metric:'water', current:curWater, target:50,       unit:'%'},
+    ].forEach(({metric,current,target,unit}) => {
+      const key    = c.id+'-'+metric;
+      const diff   = current - target;
+      const isHigh = diff >  ALARM_THRESH[metric];
+      const isLow  = diff < -ALARM_THRESH[metric];
+      const lastT  = activeAlarms[key] || 0;
+      const cooldownOk = (now - lastT) >= AUTO_INTERVAL_MS;
+
+      if((isHigh || isLow) && cooldownOk){
+        // Record alarm time
+        activeAlarms[key] = now;
+        const dir = isHigh ? 'too high' : 'too low';
+        // Log silently
+        addLog(c.id,'#fbbf24',
+          `⚠ AUTO-ALARM: ${metricLabel(metric)} ${dir} (${fmtVal(metric,current)}${unit}, target ${target}${unit})`);
+        // Apply correction
+        autoCorrect(c, metric, isHigh);
+        addLog(c.id,'#4ade80',
+          `✓ AUTO-FIX: ${autoActionLabel(metric,isHigh)} — restoring to ${target}${unit}`);
+        if(activeCropId===c.id) renderLog(c.id);
+
+      } else if(!isHigh && !isLow && activeAlarms[key]){
+        // Resolved — log once then clear
+        delete activeAlarms[key];
+        addLog(c.id,'#4ade80',
+          `✓ RESOLVED: ${metricLabel(metric)} back to normal (${fmtVal(metric,current)}${unit})`);
+        if(activeCropId===c.id) renderLog(c.id);
+      }
+
+      // Continuous gentle correction while out of range (every tick, no alarm)
+      if(isHigh || isLow) autoCorrect(c, metric, isHigh);
+    });
+  });
+}
+
+function autoCorrect(crop, metric, isHigh){
+  const spd = CORRECT_SPEED[metric];
+  const dev  = cropDevices[crop.id];
+  const h    = cropHistory[crop.id];
+  if(!dev || !h) return;
+
+  if(metric==='temp'){
+    if(isHigh){ dev.fan=true;  dev.heat=false; h.temp=h.temp.map(v=>Math.max(crop.tTemp-0.5, v-spd*0.25)); }
+    else       { dev.heat=true; dev.fan=false;  h.temp=h.temp.map(v=>Math.min(crop.tTemp+0.5, v+spd*0.25)); }
+  } else if(metric==='hum'){
+    if(isHigh){ dev.fan=true; h.hum=h.hum.map(v=>Math.max(crop.tHum-1, v-spd*0.2)); }
+    else       { dev.hum=true; h.hum=h.hum.map(v=>Math.min(crop.tHum+1, v+spd*0.2)); }
+  } else if(metric==='co2'){
+    if(isHigh){ dev.co2=false; h.co2=h.co2.map(v=>Math.max(crop.tCO2-10, v-spd*0.4)); }
+    else       { dev.co2=true;  h.co2=h.co2.map(v=>Math.min(crop.tCO2+10, v+spd*0.4)); }
+  } else if(metric==='water'){
+    if(!isHigh){ dev.pump=true; crop.waterLevel=Math.min(100, crop.waterLevel+spd); }
+  }
+
+  // Silently sync device UI if on this crop's page
+  if(activeCropId===crop.id) syncDeviceUI(crop.id);
+}
+
+function syncDeviceUI(cropId){
+  ['fan','heat','hum','co2','pump'].forEach(key=>{
+    const card=document.getElementById('dev-'+cropId+'-'+key);
+    const chk=card?card.querySelector('input[type=checkbox]'):null;
+    const stat=document.getElementById('dstat-'+cropId+'-'+key);
+    if(!card||!chk) return;
+    const on=cropDevices[cropId][key];
+    chk.checked=on;
+    if(on){card.classList.add('on');if(stat)stat.textContent=liveDevText(key);}
+    else  {card.classList.remove('on');if(stat)stat.textContent='Idle — standby';}
+  });
+}
+
+// Run auto-correction silently every tick (gentle nudge),
+// but alarms only fire once per 30 minutes per metric per crop
+setInterval(runAutoCorrection, 3600); // check every ~3s for corrections; alarm log only after 30min cooldown
+
+</script>
+
+</body>
+</html>
